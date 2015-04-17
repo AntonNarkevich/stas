@@ -1,29 +1,33 @@
-var settings = require("./settings.json");
-
-var request = require('request');
-var q = require('q');
 var util = require('util');
 
-var get = q.denodeify(request.get);
+var Promise = require("bluebird");
+var request = Promise.promisifyAll(require('request'));
+var _ = require("lodash");
 
-function getFriends(userId) {
-	var url = util.format("https://api.vk.com/method/friends.get?user_id=%d&access_token=%s", +userId, settings.token);
+var settings = require("./settings.json");
 
-	return get({url: url, json: true}).then(function (response) {
-		var error = response[1].error;
-		if (error) {
-			console.log("Error getting friends for %d: %s", userId, error.error_msg);
+var getFriends = function (userId) {
+    //TODO: {} => url params
+    var url = util.format("https://api.vk.com/method/friends.get?user_id=%d", +userId);
 
-			if (error.error_code === 15) { //User is blocked.
-				return [];
-			}
+    return request.getAsync({url: url, json: true, timeout: settings.requestTimeout}).spread(function (response, body) {
+        var error = body.error;
 
-			throw error;
-		}
+        if (error) {
+            console.log("Error in getFriends userId: %d, msg: %s, code: %d", userId, error.error_msg, error.error_code);
 
-		console.log("Got friends for %d", userId);
-		return response[1].response;
-	}).delay(settings.pauseBetweenRequests);
-}
+            if (error && _.includes([201, 15], error.error_code)) {
+                return [];
+            } else {
+                throw error;
+            }
+        }
+
+        console.log("Got friends for %d", userId);
+
+        return body.response;
+
+    }).delay(settings.pauseBetweenRequests);
+};
 
 module.exports = getFriends;

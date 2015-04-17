@@ -1,31 +1,67 @@
+var _ = require("lodash");
+var Promise = require("bluebird");
+var request = Promise.promisifyAll(require('request'));
+
+var getApiUrl = require("./apiUrl");
+var inputCaptcha = require("./inputCaptcha");
+var audioDb = require("./audioDb");
+
 var settings = require("./settings.json");
 
-var request = require('request');
-var q = require('q');
-var util = require('util');
-var _ = require('lodash');
+var AudioInfo = function (userId, tracks) {
+    this.userId = userId;
+    this.tracks = tracks || [];
+};
 
-var get = q.denodeify(request.get);
+var getAudioFromApi = function (userId, params) {
+    var urlParams = params || {};
+    urlParams.owner_id = userId;
+    urlParams.access_token = settings.token;
 
-function getAduio(userId) {
-	var url = util.format("https://api.vk.com/method/audio.get?owner_id=%d&access_token=%s", +userId, settings.token);
+    var url = getApiUrl("audio.get", urlParams);
+    console.log("getAudio: url is %s", url);
 
-	return get({url: url, json:true}).then(function (response) {
-		var error = response[1].error;
-		if (error) {
-			console.log("Error getting audios for %d: %s", userId, error.error_msg);
+    return request.getAsync({url: url, json: true, timeout: settings.requestTimeout}).spread(function (response, body) {
+        var error = body.error;
+        if (error) {
+            console.log("Error in getAudio userId: %d, msg: %s, code: %d", userId, error.error_msg, error.error_code);
 
-			if (error.error_code === 15) { //User is blocked.
-				return [];
-			}
+            var errorCode = error.error_code;
+            //Captcha needed
+            if (errorCode === 14) {
+                console.log("Capthca is needed for %d. Creating special promise.", userId);
 
-			throw error;
-		}
+                return inputCaptcha(error)
+                    .then(function (captcha) {
+                        urlParams.captcha_sid = error.captcha_sid;
+                        urlParams.captcha_key = captcha;
 
-		console.log("Got audio for %d", userId);
+                        return getAudio(userId, urlParams);
+                    });
+            }
 
-		return _.rest(response[1].response, 1);
-	}).delay(settings.pauseBetweenRequests)
-}
+            //User is blocked or audio info is hidden.
+            if (error && _.includes([201, 15], errorCode)) {
+                return new AudioInfo(userId); //Empty audio array [].
+            }
 
-module.exports = getAduio;
+            throw error;
+        }
+
+        console.log("Got audio for %d", userId);
+        return new AudioInfo(userId, _.rest(response.body.response));
+    }).delay(settings.pauseBetweenRequests);
+};
+
+var getAudio = function (userId) {
+    return audioDb.getAudio(userId)
+        .then(function (audio) {
+            if (audio) {
+                return audio;
+            }
+
+            return getAudioFromApi(userId).then(audioDb.saveAudio);
+        })
+};
+
+module.exports = getAudio;

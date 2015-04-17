@@ -1,4 +1,7 @@
 {
-	"token": "80de984895189bd9404b062b982d751bee7179958144d1edfe8d4e66978638641aa6c92be20ff9ec41383",
-	"pauseBetweenRequests": 300
+  "token": "06c88ef05c9cae2d756101438e012858bb9acf480f34916e7fd63c48faebba95bc42466853e3f5cd25b3b",
+  "pauseBetweenRequests": 1000,
+  "requestTimeout": 200000,
+  "myId": 20528987,
+  "authorRegex": "Михайлов"
 }

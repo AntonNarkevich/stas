@@ -1,70 +1,51 @@
+var _ = require("lodash");
+var Promise = require("bluebird");
+var prompt = require("prompt");
+
 var getAudio = require("./getAudio");
 var getFriends = require("./getFriends");
-var _ = require("lodash");
-var q = require("q");
-var fs = require("fs");
 
-var myId = 20528987;
-var authorRegex = /Moby/;
+var settings = require("./settings.json");
 
-getFriends(myId)
-	.then(function (friends) {
-//		var friendsArray = [myId, friends];
-//		var promiseChain = q();
-//
-//		friends.forEach(function (friendId) {
-//			promiseChain = promiseChain.then(function () {
-//				return getFriends(friendId).then(function (friends) {
-//					friendsArray.push(friends);
-//				})
-//			});
-//		});
-//
-//		return promiseChain.thenResolve(friendsArray);
+prompt.start();
 
-		//in bluebird it should be
-		// return friends.map(... {concurrency: 3});
-	})
-	.then(function (friendsArrays) {
-		return _(friendsArrays)
-			.flatten()
-			.uniq()
-			.value();
-	})
-	.then(function (friends) {
-//		var promiseChain = q();
-//		var audioArrays = [];
-//
-//		friends.forEach(function (friendId) {
-//			promiseChain = promiseChain.then(function () {
-//				return getAudio(friendId).then(function (audios) {
-//					audioArrays.push(audios);
-//				})
-//			});
-//		});
-//
-//		return promiseChain.thenResolve(audioArrays);
-
-		//in bluebird map again.
-	})
-//q.when(require("./dump.json"))
-	.then(function (audioArrays) {
-		_(audioArrays)
-			.filter('length')
-			.map(function (audioArray) {
-				return {
-					id: audioArray[0].owner_id,
-					trackCount: audioArray.filter(function (track) {
-						return authorRegex.test(track.artist);
-					}).length
-				};
-			})
-			.sortByOrder(['trackCount'], false)
-			.take(5)
-			.forEach(function (fan) {
-				console.log("User %d has %d tracks", fan.id, fan.trackCount);
-			})
-			.value();
-	}).catch(function (err) {
-		console.log(err);
-	});
+Promise.bind({myId: settings.myId}) //this becomes {}, we're going to store data there.
+    .then(function () {
+        return getFriends(this.myId);
+    })
+    //.then(function (myFriends) {
+    //    this.myFriends = myFriends;
+    //    return myFriends;
+    //})
+    //.map(getFriends, {concurrency: 3})
+    .then(function (friendsOfFriends) {
+        return _([this.myId, this.myFriends, friendsOfFriends])
+            .flattenDeep()
+            .compact()
+            .uniq()
+            .value();
+    })
+    .map(getAudio, {concurrency: 1})
+    .then(function (audioInfos) {
+        return _(audioInfos)
+            .filter(function (audioInfo) {
+                return !!audioInfo.tracks.length;
+            })
+            .map(function (audioInfo) {
+                return {
+                    userId: audioInfo.userId,
+                    trackCount: audioInfo.tracks.filter(function (track) {
+                        return _.contains(track.artist, settings.authorRegex);
+                    }).length
+                };
+            })
+            .sortByOrder(['trackCount'], false)
+            .take(5)
+            .value();
+    })
+    .each(function (fan) {
+        console.log("User %d has %d tracks", fan.userId, fan.trackCount);
+    })
+    .catch(function (err) {
+        throw err;
+    });
