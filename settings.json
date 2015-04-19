@@ -1,7 +1,7 @@
 {
-  "token": "06c88ef05c9cae2d756101438e012858bb9acf480f34916e7fd63c48faebba95bc42466853e3f5cd25b3b",
+  "token": "cba34c28449eb1d8f4371449164a9afe4dcee029d6f8dbb87df74e443a34f3418b831df3a0aed29e8145f",
   "pauseBetweenRequests": 1000,
   "requestTimeout": 200000,
   "myId": 20528987,
-  "authorRegex": "Михайлов"
+  "author": "АК-47"
 }
